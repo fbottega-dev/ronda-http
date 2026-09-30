@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "targets": [
+    {"name": "Saúde da API", "url": "http://127.0.0.1:8787/health", "contains": "\"status\":\"ok\""},
+    {"name": "Serviço indisponível", "url": "http://127.0.0.1:8787/unavailable", "retries": 1},
+    {"name": "Resposta lenta", "url": "http://127.0.0.1:8787/slow", "timeout_ms": 150},
+    {"name": "Conteúdo inesperado", "url": "http://127.0.0.1:8787/catalog", "contains": "produto-inexistente"}
+  ]
+}

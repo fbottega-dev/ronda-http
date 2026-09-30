@@ -1,0 +1,10 @@
+/bin/
+/coverage.out
+/report.json
+/ronda.json
+/ronda
+/ronda.exe
+*.log
+.env
+.env.*
+!.env.example

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "targets": [
+    {"name": "Saúde da API", "url": "http://127.0.0.1:8787/health", "contains": "\"status\":\"ok\"", "max_latency_ms": 1000},
+    {"name": "Catálogo de demonstração", "url": "http://127.0.0.1:8787/catalog", "contains": "Caderno", "timeout_ms": 2000},
+    {"name": "Rota protegida", "url": "http://127.0.0.1:8787/private", "expect_status": [401]},
+    {"name": "Página movida", "url": "http://127.0.0.1:8787/moved", "expect_status": [302]}
+  ]
+}
