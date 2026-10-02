@@ -2,11 +2,13 @@
 
 A entrega atual é a **etapa 1**, uma base executável. O projeto mais amplo está incompleto: as etapas abaixo ainda não foram implementadas. Não existem botões ou opções anunciando recursos que o programa não executa.
 
+Incremento concluído em 02/10/2026: `check --only NOME` seleciona um destino pelo nome exato. Nomes vazios ou inexistentes retornam erro antes da rede. Testes verificam que os destinos excluídos não são chamados, seus tokens não são exigidos e os relatórios contêm apenas o selecionado.
+
 Quando for solicitado “mais commits”, continue neste repositório. Primeiro confira `git status`, histórico e testes. Escolha um incremento pequeno, implemente, valide e documente. Não complete todo o roteiro de uma vez; a intenção é acompanhar o aprendizado e a evolução entre conversas.
 
 | Prioridade | Etapa pendente | Benefício e critério de conclusão |
 | --- | --- | --- |
-| 1 | Selecionar destinos com `--only` e depois grupos na configuração | Verificar somente uma parte do ambiente. Nomes/grupos inexistentes precisam produzir erro claro; testes devem provar que destinos excluídos não recebem requisições. |
+| 1 | Selecionar grupos de destinos na configuração | Ampliar o `--only`, já implementado, para executar conjuntos de serviços. Grupos inexistentes precisam produzir erro claro; testes devem provar que destinos excluídos não recebem requisições. |
 | 2 | Histórico local de execuções | Consultar resultados anteriores sem organizar arquivos manualmente. Definir retenção, formato e migração; persistir apenas os campos seguros do relatório. Avaliar SQLite quando a consulta justificar uma dependência. |
 | 3 | Comparação entre execuções | Identificar o que começou a falhar ou se recuperou. Comparar por identificador estável, tratando destinos adicionados/removidos e formatos incompatíveis. |
 | 4 | Relatório JUnit | Anexar as verificações a pipelines que exibem resultados de testes. Validar XML, escaping e falhas sem expor tokens ou conteúdo. |

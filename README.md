@@ -11,6 +11,7 @@ Esta é a base de um projeto que será construído em etapas. Ainda faltam hist�
 - Requisições GET e HEAD, com status esperado, prazo por requisição e limite opcional de latência.
 - Busca literal de um texto na resposta, com limite de leitura de 1 MiB.
 - Até oito verificações simultâneas, mantendo a ordem da configuração no relatório.
+- Seleção de um destino pelo nome com `--only`, sem executar os demais.
 - Até duas novas tentativas para falhas de rede ou respostas 5xx; falhas de TLS não são repetidas.
 - Token Bearer obtido de variável de ambiente, sem gravar o valor no JSON de configuração.
 - Saída legível no terminal, relatório JSON e códigos de saída para scripts.
@@ -110,7 +111,21 @@ Verificação de serviços · resultado da execução
 
 A configuração deve ser UTF-8, até 1 MiB. Campos desconhecidos, duplicados, `null` e nomes de campos com caixa diferente são rejeitados. Erros indicam o número do destino, sem repetir seus valores.
 
-No PowerShell, configure um token de teste com `$env:RONDA_API_TOKEN = 'seu-token-de-teste'`; no bash, use `export RONDA_API_TOKEN='seu-token-de-teste'`. Os valores devem ficar no ambiente, fora do repositório. Todos os tokens exigidos são conferidos antes de iniciar qualquer requisição.
+No PowerShell, configure um token de teste com `$env:RONDA_API_TOKEN = 'seu-token-de-teste'`; no bash, use `export RONDA_API_TOKEN='seu-token-de-teste'`. Os valores devem ficar no ambiente, fora do repositório. Os tokens dos destinos selecionados são conferidos antes de iniciar qualquer requisição.
+
+## Verificar somente um destino
+
+Com a demonstração aberta em outro terminal:
+
+```sh
+go run ./cmd/ronda check --config examples/demo.json --only "Saúde da API"
+```
+
+Use o nome exato do destino, respeitando maiúsculas, acentos e espaços internos. Nomes com espaços precisam de aspas. A configuração remove espaços externos de `name`; use esse nome sem acrescentar espaços ao argumento. Sem `--only`, todos os destinos continuam sendo executados.
+
+O relatório e suas contagens incluem somente o destino escolhido. A opção funciona também com `--format json` e `--output`. Um nome vazio ou inexistente retorna código 2, sem iniciar requisições nem criar o relatório.
+
+A configuração inteira continua sendo validada para detectar erros e nomes duplicados. Depois disso, somente o token do destino selecionado é exigido: não é necessário configurar tokens de serviços que não serão consultados.
 
 ## Relatórios e códigos de saída
 

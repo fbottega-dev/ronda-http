@@ -6,7 +6,7 @@ Comece executando os dois exemplos: `examples/demo.json` passa e `examples/failu
 
 1. `cmd/ronda/main.go` recebe os argumentos e cria um contexto cancelável por Ctrl+C. O código de saída vem de `cli.Run`.
 2. `internal/cli/cli.go` interpreta as opções, abre a configuração e chama `config.Load`. Mantém mensagens de progresso em stderr para que stdout possa conter JSON puro.
-3. `internal/config/config.go` aplica valores padrão e rejeita configurações ambíguas. Antes de estudar toda a validação, acompanhe apenas os campos `url`, `expect_status` e `timeout_ms`.
+3. `internal/config/config.go` aplica valores padrão e rejeita configurações ambíguas. Antes de estudar toda a validação, acompanhe apenas os campos `url`, `expect_status` e `timeout_ms`. Depois da validação, a CLI aplica `--only`, quando informado, reduzindo a lista a um destino antes de resolver tokens ou acessar a rede.
 4. `internal/checker/checker.go` resolve os tokens e distribui índices dos destinos entre um número limitado de trabalhadores. Cada um escreve em uma posição diferente da lista. `WaitGroup` garante que todos terminaram antes de contar os resultados.
 5. `checkOnce` envia a requisição e verifica status, conteúdo e latência. Falhas esperadas viram dados de um `Attempt`; erros de configuração impedem iniciar a execução.
 6. A CLI apresenta o relatório, salva JSON quando solicitado e devolve o código apropriado.
@@ -39,8 +39,10 @@ Referências oficiais: [começar com Go](https://go.dev/doc/tutorial/getting-sta
 - Por que não seguir um redirecionamento automaticamente quando há um token?
 - Por que usar JSON nesta etapa e deixar banco para quando houver histórico?
 
-Uma apresentação honesta: “Estou construindo uma ferramenta em Go para conferir serviços HTTP. Na primeira etapa implementei configuração, execução concorrente limitada e relatórios. Os testes usam servidores locais para reproduzir timeout, erro e redirecionamento. Ainda vou adicionar histórico e filtros. Usei IA como apoio e estudei o fluxo desde o comando até a requisição.” Adapte isso ao que você realmente consegue demonstrar.
+Uma apresentação honesta: “Estou construindo uma ferramenta em Go para conferir serviços HTTP. Na primeira etapa implementei configuração, execução concorrente limitada e relatórios. Depois acrescentei seleção de um serviço por nome e testei que os demais não recebem requisições. Os testes usam servidores locais para reproduzir timeout, erro e redirecionamento. Ainda vou adicionar histórico e grupos. Usei IA como apoio e estudei o fluxo desde o comando até a requisição.” Adapte isso ao que você realmente consegue demonstrar.
 
 ## Uma mudança pequena para fazer sozinho
 
-Adicione `--only NOME` a `check` para selecionar exatamente um destino antes da execução. Reutilize a configuração validada e retorne erro 2 quando o nome não existir. Escreva um teste que conte requisições e confirme que os outros destinos não foram chamados. Atualize a ajuda e o README. É um primeiro passo útil antes de implementar grupos.
+Estude os testes de `--only` em `internal/cli/only_test.go`. Observe por que eles contam requisições, em vez de conferir somente o texto exibido.
+
+Depois adicione um comando `list` para mostrar os nomes e métodos dos destinos de uma configuração, sem fazer requisições ou exigir tokens. Reutilize `config.Load`, evite exibir URLs e escreva um teste com um servidor local que confirme zero requisições. Isso facilita descobrir qual nome usar em `--only`.

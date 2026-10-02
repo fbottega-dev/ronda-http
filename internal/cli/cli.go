@@ -20,7 +20,7 @@ const help = `RONDA HTTP · verificações de serviços pelo terminal
 
 Uso:
   ronda init [--config ronda.json]
-  ronda check [--config ronda.json] [--parallel 4]
+  ronda check [--config ronda.json] [--parallel 4] [--only NOME]
               [--format text|json] [--output report.json]
   ronda demo [--addr 127.0.0.1:8787]
   ronda version
@@ -32,6 +32,7 @@ Comece em dois terminais:
 
 init cria uma configuração de demonstração sem substituir arquivos.
 check verifica status, conteúdo opcional e tempo de resposta.
+--only seleciona um destino pelo nome exato da configuração.
 --output salva o relatório JSON em um arquivo novo, além da saída normal.
 demo inicia serviços fictícios locais; Ctrl+C encerra o servidor.
 
@@ -123,8 +124,18 @@ func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 	parallel := set.Int("parallel", 4, "verificações simultâneas, de 1 a 8")
 	format := set.String("format", "text", "formato da saída: text ou json")
 	output := set.String("output", "", "salvar JSON em um arquivo novo (não substitui existentes)")
+	only := set.String("only", "", "verificar apenas o destino com este nome exato")
 	if ok, code := parsed(set, args, errOut); !ok {
 		return code
+	}
+	var onlyProvided bool
+	set.Visit(func(option *flag.Flag) {
+		if option.Name == "only" {
+			onlyProvided = true
+		}
+	})
+	if onlyProvided && strings.TrimSpace(*only) == "" {
+		return fail(errOut, "only exige um nome de destino não vazio")
 	}
 	if *format != "text" && *format != "json" {
 		return fail(errOut, "format deve ser text ou json")
@@ -143,6 +154,21 @@ func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	if closeErr != nil {
 		return fail(errOut, "não foi possível fechar o arquivo de configuração")
+	}
+	if onlyProvided {
+		// Validate the complete file first, then resolve tokens and run checks
+		// only for the selected target. An unrelated missing token must not block it.
+		var selected []config.Target
+		for _, target := range cfg.Targets {
+			if target.Name == *only {
+				selected = []config.Target{target}
+				break
+			}
+		}
+		if len(selected) == 0 {
+			return fail(errOut, "nenhum destino corresponde a --only; use o nome exato da configuração")
+		}
+		cfg.Targets = selected
 	}
 	if *format == "text" {
 		fmt.Fprintf(errOut, "Verificando %d destinos...\n", len(cfg.Targets))
