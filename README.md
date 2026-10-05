@@ -8,6 +8,7 @@ Esta é a base de um projeto que será construído em etapas. Ainda faltam hist�
 
 ## O que funciona nesta etapa
 
+- Validação da configuração com `validate`, sem consultar serviços ou exigir tokens.
 - Requisições GET e HEAD, com status esperado, prazo por requisição e limite opcional de latência.
 - Busca literal de um texto na resposta, com limite de leitura de 1 MiB.
 - Até oito verificações simultâneas, mantendo a ordem da configuração no relatório.
@@ -112,6 +113,25 @@ Verificação de serviços · resultado da execução
 A configuração deve ser UTF-8, até 1 MiB. Campos desconhecidos, duplicados, `null` e nomes de campos com caixa diferente são rejeitados. Erros indicam o número do destino, sem repetir seus valores.
 
 No PowerShell, configure um token de teste com `$env:RONDA_API_TOKEN = 'seu-token-de-teste'`; no bash, use `export RONDA_API_TOKEN='seu-token-de-teste'`. Os valores devem ficar no ambiente, fora do repositório. Os tokens dos destinos selecionados são conferidos antes de iniciar qualquer requisição.
+
+## Validar a configuração sem acessar a rede
+
+Use `validate` depois de editar o arquivo ou antes de executar verificações em um pipeline:
+
+```sh
+go run ./cmd/ronda validate --config examples/demo.json
+go run ./cmd/ronda validate --config examples/auth.json
+```
+
+Não é necessário iniciar o servidor de demonstração nem definir o token do segundo exemplo. O comando aplica as mesmas regras de configuração usadas por `check`, mas não resolve variáveis de token, envia requisições ou cria relatórios. Sem `--config`, lê `ronda.json`.
+
+Quando o arquivo é válido, mostra somente a confirmação e a quantidade de destinos:
+
+```text
+Configuração válida. Destinos: 4.
+```
+
+Não exibe nomes, URLs, conteúdo esperado ou variáveis de token. O binário retorna `0` quando a configuração é válida e `2` em caso de erro de configuração, arquivo, argumento ou escrita da saída. Para consultar esse código em scripts, use o executável compilado. Essa validação verifica a estrutura e as regras do arquivo; não confirma disponibilidade do serviço, validade de um token ou conteúdo da resposta. Para isso, execute `check`.
 
 ## Verificar somente um destino
 

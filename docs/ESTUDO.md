@@ -13,6 +13,12 @@ Comece executando os dois exemplos: `examples/demo.json` passa e `examples/failu
 
 O servidor de `internal/demo` é apenas um ambiente fictício para reproduzir esses caminhos. Ele escuta somente em loopback; não é a API de um produto real.
 
+## Validar antes de acessar os serviços
+
+Execute `go run ./cmd/ronda validate --config examples/auth.json`, mesmo sem definir o token. A configuração deve passar porque o comando verifica o arquivo, não a autenticação do serviço.
+
+Em `internal/cli/cli.go`, acompanhe `validateConfiguration` até `readConfiguration`, que também é usada por `check`. Ambas aplicam `config.Load`; somente `check` chama o motor HTTP. Em `internal/cli/validate_test.go`, observe como um servidor local conta requisições para provar que a validação não o consulta. A saída contém apenas a confirmação e a quantidade de destinos.
+
 ## Fundamentos novos em Go
 
 | Conceito | Onde observar |

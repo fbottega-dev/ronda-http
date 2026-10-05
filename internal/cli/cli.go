@@ -20,6 +20,7 @@ const help = `RONDA HTTP · verificações de serviços pelo terminal
 
 Uso:
   ronda init [--config ronda.json]
+  ronda validate [--config ronda.json]
   ronda check [--config ronda.json] [--parallel 4] [--only NOME]
               [--format text|json] [--output report.json]
   ronda demo [--addr 127.0.0.1:8787]
@@ -31,6 +32,7 @@ Comece em dois terminais:
      ronda check
 
 init cria uma configuração de demonstração sem substituir arquivos.
+validate confere o arquivo de configuração sem acessar os serviços.
 check verifica status, conteúdo opcional e tempo de resposta.
 --only seleciona um destino pelo nome exato da configuração.
 --output salva o relatório JSON em um arquivo novo, além da saída normal.
@@ -74,6 +76,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return printResult(out, errOut, fmt.Sprintf("Ronda HTTP %s\n", version))
 	case "init":
 		return initialize(args[1:], out, errOut)
+	case "validate":
+		return validateConfiguration(args[1:], out, errOut)
 	case "check":
 		return check(ctx, args[1:], out, errOut)
 	case "demo":
@@ -118,6 +122,37 @@ func initialize(args []string, out, errOut io.Writer) int {
 	return printResult(out, errOut, "Configuração criada. Inicie ronda demo em outro terminal e execute ronda check.\n")
 }
 
+func validateConfiguration(args []string, out, errOut io.Writer) int {
+	set := flags("validate", errOut)
+	path := set.String("config", "ronda.json", "arquivo de configuração JSON")
+	if ok, code := parsed(set, args, errOut); !ok {
+		return code
+	}
+	cfg, err := readConfiguration(*path)
+	if err != nil {
+		return fail(errOut, err.Error())
+	}
+	return printResult(out, errOut, fmt.Sprintf("Configuração válida. Destinos: %d.\n", len(cfg.Targets)))
+}
+
+// Both commands use the same validation, but only check resolves tokens and
+// accesses services. Keep file errors generic because paths may be sensitive.
+func readConfiguration(path string) (config.Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return config.Config{}, errors.New("não foi possível abrir a configuração; confira --config ou execute ronda init")
+	}
+	cfg, loadErr := config.Load(file)
+	closeErr := file.Close()
+	if loadErr != nil {
+		return config.Config{}, loadErr
+	}
+	if closeErr != nil {
+		return config.Config{}, errors.New("não foi possível fechar o arquivo de configuração")
+	}
+	return cfg, nil
+}
+
 func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 	set := flags("check", errOut)
 	path := set.String("config", "ronda.json", "arquivo de configuração JSON")
@@ -143,17 +178,9 @@ func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if *parallel < 1 || *parallel > 8 {
 		return fail(errOut, "parallel deve estar entre 1 e 8")
 	}
-	file, err := os.Open(*path)
+	cfg, err := readConfiguration(*path)
 	if err != nil {
-		return fail(errOut, "não foi possível abrir a configuração; confira --config ou execute ronda init")
-	}
-	cfg, loadErr := config.Load(file)
-	closeErr := file.Close()
-	if loadErr != nil {
-		return fail(errOut, loadErr.Error())
-	}
-	if closeErr != nil {
-		return fail(errOut, "não foi possível fechar o arquivo de configuração")
+		return fail(errOut, err.Error())
 	}
 	if onlyProvided {
 		// Validate the complete file first, then resolve tokens and run checks

@@ -4,6 +4,8 @@ A entrega atual é a **etapa 1**, uma base executável. O projeto mais amplo est
 
 Incremento concluído em 02/10/2026: `check --only NOME` seleciona um destino pelo nome exato. Nomes vazios ou inexistentes retornam erro antes da rede. Testes verificam que os destinos excluídos não são chamados, seus tokens não são exigidos e os relatórios contêm apenas o selecionado.
 
+Incremento concluído em 05/10/2026: `validate --config` permite conferir um arquivo antes de acessar os serviços. Reutiliza a validação de `check`, sem resolver tokens, fazer requisições ou exibir os valores da configuração. Testes verificam ausência de acesso à rede, preservação do arquivo, erros e códigos de saída.
+
 Quando for solicitado “mais commits”, continue neste repositório. Primeiro confira `git status`, histórico e testes. Escolha um incremento pequeno, implemente, valide e documente. Não complete todo o roteiro de uma vez; a intenção é acompanhar o aprendizado e a evolução entre conversas.
 
 | Prioridade | Etapa pendente | Benefício e critério de conclusão |
