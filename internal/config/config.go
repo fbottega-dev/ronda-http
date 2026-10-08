@@ -17,6 +17,7 @@ import (
 const maxConfigBytes = 1 << 20
 
 var environmentName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var targetID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 // Config describes a single run. Version is required so future formats can be
 // introduced without silently changing the meaning of an existing file.
@@ -27,15 +28,17 @@ type Config struct {
 
 // Target describes one HTTP check. Times are integer milliseconds.
 type Target struct {
-	Name         string `json:"name"`
-	URL          string `json:"url"`
-	Method       string `json:"method"`
-	ExpectStatus []int  `json:"expect_status"`
-	TimeoutMS    int    `json:"timeout_ms"`
-	MaxLatencyMS int    `json:"max_latency_ms"`
-	Contains     string `json:"contains"`
-	TokenEnv     string `json:"token_env"`
-	Retries      int    `json:"retries"`
+	ID           string   `json:"id,omitempty"`
+	Name         string   `json:"name"`
+	Groups       []string `json:"groups,omitempty"`
+	URL          string   `json:"url"`
+	Method       string   `json:"method"`
+	ExpectStatus []int    `json:"expect_status"`
+	TimeoutMS    int      `json:"timeout_ms"`
+	MaxLatencyMS int      `json:"max_latency_ms"`
+	Contains     string   `json:"contains"`
+	TokenEnv     string   `json:"token_env"`
+	Retries      int      `json:"retries"`
 }
 
 // Load accepts up to 1 MiB of UTF-8 JSON, rejects unknown or duplicate keys,
@@ -89,7 +92,7 @@ func Load(reader io.Reader) (Config, error) {
 	for i, fields := range targets {
 		for key, value := range fields {
 			switch key {
-			case "name", "url", "method", "expect_status", "timeout_ms", "max_latency_ms", "contains", "token_env", "retries":
+			case "id", "name", "groups", "url", "method", "expect_status", "timeout_ms", "max_latency_ms", "contains", "token_env", "retries":
 			default:
 				return Config{}, targetError(i, "campo desconhecido")
 			}
@@ -99,6 +102,9 @@ func Load(reader io.Reader) (Config, error) {
 		}
 		if _, present := fields["timeout_ms"]; present && (input.Targets[i].TimeoutMS < 100 || input.Targets[i].TimeoutMS > 30000) {
 			return Config{}, targetError(i, "timeout_ms explícito deve estar entre 100 e 30000")
+		}
+		if _, present := fields["id"]; present && input.Targets[i].ID == "" {
+			return Config{}, targetError(i, "id explícito não pode ser vazio")
 		}
 	}
 	return Validate(input)
@@ -150,7 +156,17 @@ func Validate(input Config) (Config, error) {
 	}
 	result := Config{Version: input.Version, Targets: make([]Target, len(input.Targets))}
 	names := make(map[string]bool, len(input.Targets))
+	ids := make(map[string]bool, len(input.Targets))
 	for i, target := range input.Targets {
+		if target.ID != "" {
+			if !targetID.MatchString(target.ID) {
+				return Config{}, targetError(i, "id deve ter de 1 a 64 letras ASCII, números, hífens ou sublinhados e começar com letra ou número")
+			}
+			if ids[target.ID] {
+				return Config{}, targetError(i, "id deve ser único")
+			}
+			ids[target.ID] = true
+		}
 		if !utf8.ValidString(target.Name) || strings.ContainsFunc(target.Name, unicode.IsControl) {
 			return Config{}, targetError(i, "name deve ser um texto válido sem caracteres de controle")
 		}
@@ -162,6 +178,28 @@ func Validate(input Config) (Config, error) {
 			return Config{}, targetError(i, "name deve ser único")
 		}
 		names[target.Name] = true
+		if len(target.Groups) > 10 {
+			return Config{}, targetError(i, "groups deve conter no máximo 10 grupos")
+		}
+		if target.Groups != nil {
+			groups := make([]string, len(target.Groups))
+			seenGroups := make(map[string]bool, len(target.Groups))
+			for j, group := range target.Groups {
+				if !utf8.ValidString(group) || strings.ContainsFunc(group, unicode.IsControl) {
+					return Config{}, targetError(i, "cada grupo deve ser um texto válido sem caracteres de controle")
+				}
+				group = strings.TrimSpace(group)
+				if length := utf8.RuneCountInString(group); length < 1 || length > 40 {
+					return Config{}, targetError(i, "cada grupo deve ter de 1 a 40 caracteres")
+				}
+				if seenGroups[group] {
+					return Config{}, targetError(i, "groups não pode repetir um grupo no mesmo destino")
+				}
+				seenGroups[group] = true
+				groups[j] = group
+			}
+			target.Groups = groups
+		}
 		address, err := url.Parse(target.URL)
 		if err != nil || !address.IsAbs() || (address.Scheme != "http" && address.Scheme != "https") || address.Hostname() == "" || address.User != nil || strings.Contains(target.URL, "#") {
 			return Config{}, targetError(i, "url deve ser HTTP ou HTTPS absoluta, sem credenciais ou fragmento")

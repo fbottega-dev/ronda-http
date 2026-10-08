@@ -2,7 +2,7 @@
   "version": 1,
   "targets": [
     {"id": "health", "name": "Saúde da API", "groups": ["local", "essencial"], "url": "http://127.0.0.1:8787/health", "contains": "\"status\":\"ok\"", "max_latency_ms": 1000},
-    {"id": "catalog", "name": "Catálogo de demonstração", "groups": ["local", "essencial"], "url": "http://127.0.0.1:8787/catalog", "contains": "Caderno", "timeout_ms": 2000},
+    {"id": "catalog", "name": "Catálogo de demonstração", "groups": ["local", "essencial"], "url": "http://127.0.0.1:8787/catalog", "expect_status": [201], "contains": "Caderno", "timeout_ms": 2000},
     {"id": "private", "name": "Rota protegida", "groups": ["local"], "url": "http://127.0.0.1:8787/private", "expect_status": [401]},
     {"id": "moved", "name": "Página movida", "groups": ["local"], "url": "http://127.0.0.1:8787/moved", "expect_status": [302]}
   ]

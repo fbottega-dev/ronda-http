@@ -42,6 +42,7 @@ type Report struct {
 
 // Result preserves the position and name of a target in the configuration.
 type Result struct {
+	ID       string    `json:"id,omitempty"`
 	Name     string    `json:"name"`
 	Passed   bool      `json:"passed"`
 	Attempts []Attempt `json:"attempts"`
@@ -138,7 +139,7 @@ schedule:
 	for i := range report.Results {
 		result := &report.Results[i]
 		if len(result.Attempts) == 0 {
-			*result = Result{Name: cfg.Targets[i].Name, Attempts: []Attempt{canceledAttempt()}}
+			*result = Result{ID: cfg.Targets[i].ID, Name: cfg.Targets[i].Name, Attempts: []Attempt{canceledAttempt()}}
 		}
 		if result.Passed {
 			report.Passed++
@@ -155,7 +156,7 @@ schedule:
 }
 
 func checkTarget(ctx context.Context, target config.Target, token string, transport *http.Transport) Result {
-	result := Result{Name: target.Name, Attempts: make([]Attempt, 0, target.Retries+1)}
+	result := Result{ID: target.ID, Name: target.Name, Attempts: make([]Attempt, 0, target.Retries+1)}
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   time.Duration(target.TimeoutMS) * time.Millisecond,

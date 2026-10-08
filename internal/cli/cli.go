@@ -14,6 +14,8 @@ import (
 	"github.com/fbottega-dev/ronda-http/internal/checker"
 	"github.com/fbottega-dev/ronda-http/internal/config"
 	"github.com/fbottega-dev/ronda-http/internal/demo"
+	"github.com/fbottega-dev/ronda-http/internal/history"
+	reports "github.com/fbottega-dev/ronda-http/internal/report"
 )
 
 const help = `RONDA HTTP · verificações de serviços pelo terminal
@@ -21,8 +23,11 @@ const help = `RONDA HTTP · verificações de serviços pelo terminal
 Uso:
   ronda init [--config ronda.json]
   ronda validate [--config ronda.json]
-  ronda check [--config ronda.json] [--parallel 4] [--only NOME]
-              [--format text|json] [--output report.json]
+  ronda list [--config ronda.json]
+  ronda check [--config ronda.json] [--parallel 4] [--only NOME | --group GRUPO]
+              [--format text|json|junit] [--output report.json] [--history-dir DIRETÓRIO]
+  ronda history [--dir .ronda/history] [--limit 20] [--show ID] [--format text|json]
+  ronda compare --before ANTES.json --after DEPOIS.json [--format text|json]
   ronda demo [--addr 127.0.0.1:8787]
   ronda version
 
@@ -33,12 +38,16 @@ Comece em dois terminais:
 
 init cria uma configuração de demonstração sem substituir arquivos.
 validate confere o arquivo de configuração sem acessar os serviços.
+list mostra nomes, métodos e grupos sem acessar os serviços.
 check verifica status, conteúdo opcional e tempo de resposta.
 --only seleciona um destino pelo nome exato da configuração.
+--group seleciona os destinos de um grupo exato; não combina com --only.
 --output salva o relatório JSON em um arquivo novo, além da saída normal.
+--history-dir guarda cada execução em um novo arquivo JSON local.
+history consulta essas execuções; compare identifica regressões e recuperações.
 demo inicia serviços fictícios locais; Ctrl+C encerra o servidor.
 
-Saídas: 0 = tudo aprovado; 1 = verificação falhou;
+Saídas: 0 = sucesso; 1 = verificação falhou ou comparação encontrou regressão;
         2 = configuração, comando ou arquivo inválido; 130 = interrompido.
 Use "ronda COMANDO --help" para consultar as opções.
 `
@@ -47,13 +56,17 @@ const initialConfig = `{
   "version": 1,
   "targets": [
     {
+      "id": "health",
       "name": "Saúde da API",
+      "groups": ["local", "essencial"],
       "url": "http://127.0.0.1:8787/health",
       "contains": "\"status\":\"ok\"",
       "max_latency_ms": 1000
     },
     {
+      "id": "catalog",
       "name": "Catálogo de demonstração",
+      "groups": ["local"],
       "url": "http://127.0.0.1:8787/catalog",
       "contains": "Caderno"
     }
@@ -78,8 +91,14 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return initialize(args[1:], out, errOut)
 	case "validate":
 		return validateConfiguration(args[1:], out, errOut)
+	case "list":
+		return listTargets(args[1:], out, errOut)
 	case "check":
 		return check(ctx, args[1:], out, errOut)
+	case "history":
+		return showHistory(args[1:], out, errOut)
+	case "compare":
+		return compareReports(args[1:], out, errOut)
 	case "demo":
 		return serveDemo(ctx, args[1:], out, errOut)
 	default:
@@ -135,7 +154,7 @@ func validateConfiguration(args []string, out, errOut io.Writer) int {
 	return printResult(out, errOut, fmt.Sprintf("Configuração válida. Destinos: %d.\n", len(cfg.Targets)))
 }
 
-// Both commands use the same validation, but only check resolves tokens and
+// Configuration commands use the same validation, but only check resolves tokens and
 // accesses services. Keep file errors generic because paths may be sensitive.
 func readConfiguration(path string) (config.Config, error) {
 	file, err := os.Open(path)
@@ -157,23 +176,31 @@ func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 	set := flags("check", errOut)
 	path := set.String("config", "ronda.json", "arquivo de configuração JSON")
 	parallel := set.Int("parallel", 4, "verificações simultâneas, de 1 a 8")
-	format := set.String("format", "text", "formato da saída: text ou json")
+	format := set.String("format", "text", "formato da saída: text, json ou junit")
 	output := set.String("output", "", "salvar JSON em um arquivo novo (não substitui existentes)")
 	only := set.String("only", "", "verificar apenas o destino com este nome exato")
+	group := set.String("group", "", "verificar destinos deste grupo exato (não combina com --only)")
+	historyDir := set.String("history-dir", "", "guardar a execução neste diretório de histórico local")
 	if ok, code := parsed(set, args, errOut); !ok {
 		return code
 	}
-	var onlyProvided bool
+	var emptyOption string
 	set.Visit(func(option *flag.Flag) {
-		if option.Name == "only" {
-			onlyProvided = true
+		switch option.Name {
+		case "only", "group", "history-dir", "output":
+			if strings.TrimSpace(option.Value.String()) == "" {
+				emptyOption = option.Name
+			}
 		}
 	})
-	if onlyProvided && strings.TrimSpace(*only) == "" {
-		return fail(errOut, "only exige um nome de destino não vazio")
+	if emptyOption != "" {
+		return fail(errOut, emptyOption+" exige um valor não vazio")
 	}
-	if *format != "text" && *format != "json" {
-		return fail(errOut, "format deve ser text ou json")
+	if *only != "" && *group != "" {
+		return fail(errOut, "only e group não podem ser usados juntos")
+	}
+	if *format != "text" && *format != "json" && *format != "junit" {
+		return fail(errOut, "format deve ser text, json ou junit")
 	}
 	if *parallel < 1 || *parallel > 8 {
 		return fail(errOut, "parallel deve estar entre 1 e 8")
@@ -182,20 +209,11 @@ func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return fail(errOut, err.Error())
 	}
-	if onlyProvided {
-		// Validate the complete file first, then resolve tokens and run checks
-		// only for the selected target. An unrelated missing token must not block it.
-		var selected []config.Target
-		for _, target := range cfg.Targets {
-			if target.Name == *only {
-				selected = []config.Target{target}
-				break
-			}
-		}
-		if len(selected) == 0 {
-			return fail(errOut, "nenhum destino corresponde a --only; use o nome exato da configuração")
-		}
-		cfg.Targets = selected
+	// Validate the complete file before selecting. Only selected targets resolve
+	// tokens and receive requests; unrelated missing tokens do not block the run.
+	cfg, err = selectTargets(cfg, *only, *group)
+	if err != nil {
+		return fail(errOut, err.Error())
 	}
 	if *format == "text" {
 		fmt.Fprintf(errOut, "Verificando %d destinos...\n", len(cfg.Targets))
@@ -215,9 +233,19 @@ func check(ctx context.Context, args []string, out, errOut io.Writer) int {
 		}
 		fmt.Fprintln(errOut, "Relatório JSON salvo.")
 	}
-	if *format == "json" {
+	if *historyDir != "" {
+		id, saveErr := history.Save(*historyDir, report)
+		if saveErr != nil {
+			return fail(errOut, saveErr.Error())
+		}
+		fmt.Fprintf(errOut, "Histórico salvo: %s\n", id)
+	}
+	switch *format {
+	case "json":
 		_, err = out.Write(data)
-	} else {
+	case "junit":
+		err = reports.JUnit(out, report)
+	default:
 		err = renderText(out, report)
 	}
 	if err != nil {

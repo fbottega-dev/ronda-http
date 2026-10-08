@@ -1,4 +1,10 @@
 /bin/
+/dist/
+/.ronda/
+/before.json
+/after.json
+/failures.json
+/junit.xml
 /coverage.out
 /report.json
 /ronda.json
